@@ -64,6 +64,12 @@ class Communicator(object):
         """
         A manual implementation of all-reduce using a reduce-to-root
         followed by a broadcast.
+
+        Do not call built-in MPI collective operations inside this method.
+        Use point-to-point communication such as Send, Recv, or Sendrecv.
+        Your implementation should respect the passed reduction operator.
+        The required operators for this assignment are MPI.MIN, MPI.SUM,
+        and MPI.MAX.
         
         Each non-root process sends its data to process 0, which applies the
         reduction operator (by default, summation). Then process 0 sends the
@@ -79,6 +85,9 @@ class Communicator(object):
         """
         A manual implementation of all-to-all where each process sends a
         distinct segment of its source array to every other process.
+
+        Do not call built-in MPI collective operations inside this method.
+        Use point-to-point communication such as Send, Recv, or Sendrecv.
         
         It is assumed that the total length of src_array (and dest_array)
         is evenly divisible by the number of processes.

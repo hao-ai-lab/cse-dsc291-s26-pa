@@ -84,12 +84,15 @@ def naive_collect_forward_output(
     mp_size: int,
 ):
     """
-    Collects the fc_o layer's forward outputs from all model-parallel nodes.
+    Combines the fc_o layer's forward output contributions from all
+    model-parallel nodes.
 
-    Each node holds a piece of the full output with shape:
-      (batch_size, seq_length, part_out_dim)
-    After gathering, the full output should have shape:
-      (batch_size, seq_length, part_out_dim * mp_size)
+    Since fc_o is split along the input dimension, each node computes a
+    same-shaped partial contribution to the full output:
+      (batch_size, seq_length, out_dim)
+    After all-reduce summation, every node should have the full output with
+    the same shape:
+      (batch_size, seq_length, out_dim)
     """
     #TODO: Your code here
     return collected_out

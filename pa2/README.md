@@ -152,9 +152,7 @@ The Part 1 score thresholds are:
 
 In this part of the programming assignment, you will work on developing communication protocols for Data Parallel and Tensor Model Parallel training from the ground up, utilizing the Message Passing Interface ([MPI](https://mpi4py.readthedocs.io/en/stable/)) and NumPy.
 
-Since the main focus will not be on the actual forward computation or backward propagation, your task will be to implement only the communication aspects.
-
-**Note: we will only focus on the forward pass of the training loop for this PA.**
+Since the main focus will not be on the actual forward computation or backward propagation, your task will be to implement only selected communication steps used by the forward and backward passes.
 
 ### Setup Guide
 
@@ -216,7 +214,9 @@ Depending on your machine, you can control the number of processes lanched with 
 
 > **Note:** If your machine has fewer physical cores than the requested process count (common on laptops), Open MPI will refuse to launch. Pass `--oversubscribe` to allow it, e.g. `mpirun --oversubscribe -n 8 python mpi-test.py`.
 
-Additionally, we have included some simple examples of MPI functions in mpi-test.py, such as Allreduce(), Allgather(), Reduce_scatter(), Split() and Alltoall(). These are the only **collective** operations permitted for this assignment. Point-to-point primitives (`Send`, `Recv`, `Sendrecv`) are also allowed — and in fact you will need them to implement `myAllreduce` and `myAlltoall`.
+Additionally, we have included some simple examples of MPI functions in mpi-test.py, such as Allreduce(), Allgather(), Reduce_scatter(), Split() and Alltoall(). These are the only **collective** operations permitted for this assignment. Point-to-point primitives (`Send`, `Recv`, `Sendrecv`) are also allowed.
+
+For the custom primitive implementations in Section 2.1, do not call built-in MPI collective operations inside `myAllreduce` or `myAlltoall`. You should implement those two methods using point-to-point communication. This restriction applies only to the custom primitives; in the later model-parallel helper functions, you may use the collective operations introduced in this assignment as appropriate.
 
 - ##### All-Reduce
 
@@ -279,9 +279,10 @@ For instance, for `mp_size=2, dp_size=4` on 8 nodes we will group the nodes as s
 
 ### 2.1 Implementation of Collective Communication Primitives (20 pts + 10 pts bonus)
 
-In previous part, we directly use primitives from the MPI library. In this task, you need to implement your own version of two primitives: all-reduce and all-to-all. 
+In previous part, we directly use primitives from the MPI library. In this task, you need to implement your own version of two primitives: all-reduce and all-to-all.
 
 You only need to fill in the function `myAllreduce` and `myAlltoall` in the `comm.py` file!
+Your `myAllreduce` implementation should respect the passed `op` argument. The required operators for this assignment are `MPI.MIN`, `MPI.SUM`, and `MPI.MAX`.
 
 After implementing both function, you can use 
 
@@ -353,7 +354,7 @@ mpirun -n 8 python3 -m pytest -l -v --with-mpi tests/test_get_info.py
 
 Your task in this part is to implement the forward communications in W_o layer for the naive model parallel.
 You need to implement the `naive_collect_forward_input` and `naive_collect_forward_output` functions in
-`model/func_impl.py`. Please refer to the code for more details.
+`model/func_impl.py`. `naive_collect_forward_input` is an all-gather exercise: each MP rank starts with a slice of the input tensor, and the function reconstructs the full tensor. `naive_collect_forward_output` should match the `fc_o` input-dimension sharding from Section 2.3: each MP rank has a same-shaped partial output contribution, and the function should combine those partial outputs with an all-reduce sum. Please refer to the code for more details.
 
 To test your implementations, please run
 ```bash
