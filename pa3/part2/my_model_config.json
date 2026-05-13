@@ -1,0 +1,12 @@
+{
+  "_comment": "Replace this file with your own model design under the Part 2.2 budget. Use llama3_8b_config.json as a template.",
+  "architectures": ["LlamaForCausalLM"],
+  "hidden_size": 0,
+  "intermediate_size": 0,
+  "num_attention_heads": 0,
+  "num_key_value_heads": 0,
+  "num_hidden_layers": 0,
+  "max_position_embeddings": 8192,
+  "vocab_size": 128256,
+  "torch_dtype": "bfloat16"
+}

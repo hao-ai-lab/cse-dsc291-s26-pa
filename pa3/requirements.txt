@@ -1,0 +1,7 @@
+numpy>=1.24
+mpi4py>=3.1
+torch>=2.2
+transformers>=4.49
+accelerate>=0.30
+sentencepiece
+pytest
