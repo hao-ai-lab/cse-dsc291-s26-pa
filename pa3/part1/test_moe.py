@@ -1,7 +1,7 @@
 """Sanity tests for SimpleMoE / MoE_TP / MoE_EP.
 
-Run with:
-    mpirun -n 4 python test_moe.py
+Run from the pa3/ root (use --oversubscribe if you have < 4 cores):
+    mpirun -n 4 python part1/test_moe.py
 
 For MoE_EP we require num_experts == world_size.
 """
@@ -61,12 +61,21 @@ def run_moe(
     return dict(outputs=outputs, avg_duration_ms=avg_ms)
 
 
+# ShardedLinear requires hidden_dim / output_dim to be divisible by the world
+# size, so derive the dimensions from the world size to keep `mpirun -n <N>`
+# working for any N.
+def _dims():
+    ws = mpi.Get_size()
+    return dict(batch_size=8, feature_dim=4 * ws, hidden_dim=8 * ws,
+                output_dim=4 * ws)
+
+
 def test_simple_moe():
     rank = mpi.Get_rank()
     register_rng("expert_with_rank", np.random.RandomState(rank + 100))
-    result = run_moe("simple", batch_size=10, feature_dim=10, hidden_dim=10,
-                     output_dim=10, num_experts=mpi.Get_size(), topk=mpi.Get_size())
-    assert result["outputs"].shape == (10, 10)
+    d = _dims()
+    result = run_moe("simple", num_experts=mpi.Get_size(), topk=2, **d)
+    assert result["outputs"].shape == (d["batch_size"], d["output_dim"])
     if mpi.Get_rank() == 0:
         print("Simple MoE test passed")
 
@@ -74,9 +83,9 @@ def test_simple_moe():
 def test_ep_moe():
     rank = mpi.Get_rank()
     register_rng("expert_with_rank", np.random.RandomState(rank + 100))
-    result = run_moe("ep", batch_size=10, feature_dim=10, hidden_dim=10,
-                    output_dim=10, num_experts=mpi.Get_size(), topk=mpi.Get_size())
-    assert result["outputs"].shape == (10, 10)
+    d = _dims()
+    result = run_moe("ep", num_experts=mpi.Get_size(), topk=2, **d)
+    assert result["outputs"].shape == (d["batch_size"], d["output_dim"])
     if mpi.Get_rank() == 0:
         print("Expert Parallel MoE test passed")
 
@@ -84,9 +93,9 @@ def test_ep_moe():
 def test_tp_moe():
     rank = mpi.Get_rank()
     register_rng("expert_with_rank", np.random.RandomState(rank + 100))
-    result = run_moe("tp", batch_size=10, feature_dim=10, hidden_dim=10,
-                    output_dim=10, num_experts=mpi.Get_size(), topk=mpi.Get_size())
-    assert result["outputs"].shape == (10, 10)
+    d = _dims()
+    result = run_moe("tp", num_experts=mpi.Get_size(), topk=2, **d)
+    assert result["outputs"].shape == (d["batch_size"], d["output_dim"])
     if mpi.Get_rank() == 0:
         print("Tensor Parallel MoE test passed")
 

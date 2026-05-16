@@ -114,12 +114,7 @@ class ShardedLinear:
         self.local_out_features = out_features // self.world_size
         self.output_offset = self.rank * self.local_out_features
 
-        # Each rank initializes only its local slice. Because the rng has the
-        # same seed on every rank inside the `expert` context, you would get
-        # *identical* slices on each rank if you naively called randn here, so
-        # callers should wrap construction inside `rng_context("expert")` and
-        # advance the rng deterministically per rank if they want distinct
-        # initial weights. For grading we only check the forward semantics.
+        # Initialize local weights and bias
         self.weight = get_rng().randn(in_features, self.local_out_features) * 0.01
         self.bias = get_rng().randn(self.local_out_features)
 
@@ -129,12 +124,9 @@ class ShardedLinear:
 
         result = np.zeros((x.shape[0], self.out_features_global), dtype=np.float32)
 
-        # TODO (Part 1.1): produce the full output of the sharded linear layer.
-        #   - Compute the local partial output  x @ self.weight + self.bias
-        #     into the slice of `result` that this rank owns.
-        #   - Use a collective to make every rank hold the *full* output.
-        #     `Allreduce` (sum) on the zero-padded result is one valid choice.
-        #     `Allgather` along the column dimension is another.
+        # TODO (Part 1.1): compute this rank's partial output and use a
+        # collective so every rank ends up with the full
+        # (batch_size, out_features) result.
         return result
 
 
@@ -194,11 +186,9 @@ class MoE_TP:
         outputs = np.zeros((batch_size, self.output_dim))
 
         # TODO (Part 1.1): implement the TP-style forward pass.
-        # 1. Use `self.router(x, self.topk)` to get routing indices and gates.
-        # 2. For each (token, top-k slot), feed the token through the assigned
-        #    expert. Each `ShardedExpert` already handles the cross-rank
-        #    collective internally, so you can call it like a regular Expert.
-        # 3. Combine the gated expert outputs into `outputs`.
+        # 1. Get routing indices and gates from self.router(x, self.topk).
+        # 2. Run each routed token through its assigned expert and
+        #    gate-combine the results into `outputs`.
         indices, gates = self.router(x, self.topk)
 
         return outputs
@@ -255,19 +245,10 @@ class MoE_EP:
         outputs = np.zeros((batch_size, self.output_dim))
 
         # TODO (Part 1.2): implement the EP-style forward pass.
-        # 1. Use `self.router(x, self.topk)` to get routing indices and gates.
-        # 2. For each top-k slot, build a list of length `world_size` where
-        #    bucket[r] is the dict / array of tokens that should be processed
-        #    by rank r's expert. Track the original token indices so you can
-        #    scatter results back into `outputs`.
-        # 3. Use `mpi.alltoall(buckets)` to exchange tokens. Each rank now has
-        #    the tokens it needs to process locally.
-        # 4. Run `self.expert(local_tokens)` on the received tokens.
-        # 5. All-to-all the results back to the originating ranks.
-        # 6. Apply gates and accumulate into `outputs`.
-        #
-        # Note: `mpi.alltoall` (lower-case) accepts arbitrary Python objects,
-        # so you can send NumPy arrays of differing sizes per destination.
+        # 1. Get routing indices and gates from self.router(x, self.topk).
+        # 2. Send each token to the rank that owns its assigned expert.
+        # 3. Run this rank's local expert on the tokens it received.
+        # 4. Send the results back and gate-combine into `outputs`.
         indices, gates = self.router(x, self.topk)
 
         return outputs

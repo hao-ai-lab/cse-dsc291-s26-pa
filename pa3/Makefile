@@ -9,7 +9,7 @@ check:
 	@./check_submission.sh
 
 handin.tar: check $(FILES)
-	tar cvf handin.tar --exclude="*.DS_Store" --exclude="__pycache__" --exclude=".ipynb_checkpoints" $(FILES)
+	tar cvf handin.tar --exclude="*.DS_Store" --exclude="__pycache__" --exclude=".ipynb_checkpoints" --exclude="_local_check_*" --exclude="*.pyc" $(FILES)
 	@echo "handin.tar is ready."
 
 clean:

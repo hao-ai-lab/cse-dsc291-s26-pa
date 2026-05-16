@@ -4,8 +4,8 @@ Use this as a starting point. To get full credit on the benchmark you should
 sweep at least one of {batch_size, hidden_dim, num_experts, topk} and produce a
 table or plot in `analysis.md`.
 
-Run with:
-    mpirun -n 4 python benchmark.py
+Run with (from the `pa3/` directory, same convention as `test_moe.py`):
+    mpirun --oversubscribe -n 4 python part1/benchmark.py
 """
 import time
 

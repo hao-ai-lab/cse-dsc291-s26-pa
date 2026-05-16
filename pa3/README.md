@@ -14,33 +14,33 @@ copy solutions.
 
 ## Local self-check
 
-You can run a provisional grader locally to see your score before you
-submit. From the `pa3/` directory:
+From the `pa3/` directory:
 
 ```bash
-python local_check.py                  # Part 1 + Part 2 + Part 3 structural
-python local_check.py --with-gpu       # Also execute Part 3 notebook (needs CUDA)
+python local_check.py
 ```
 
-Sample output:
+This is a small sanity tool, **not your grade**. It auto-checks only the
+items that are 100% deterministic and unambiguous:
 
-```
-Part 1: MoE: 50/50
-Part 2: cost analysis (main): 30/30
-Part 2: cost analysis (bonus): 25/25
-Part 3: speculative decoding (main): 25/50    # 25 = 3.1 structural; rest needs --with-gpu
-...
-PROVISIONAL TOTAL (excluding 40-pt essay): 130/165
-```
+- **Part 1**: your `moe.py` runs under `mpirun` and produces the correct
+  output shape, replicated across ranks, and non-trivial (not all-zeros).
+- **Part 2**: `model_training_cost_analysis_llama` returns the exact
+  Llama-3 8B parameter count, and `get_optimal_N_D_from_cost(5_000_000)`
+  selects the correct GPU.
 
-> ⚠️ **PROVISIONAL SCORE NOTICE.** `local_check.py` is a sanity tool, not the
-> final grade. After you submit, the instructor runs a held-out private test
-> suite that exercises your functions on **different inputs** than the ones
-> in `local_check.py` (e.g. a different model config for Part 2, different
-> `(batch, hidden, topk)` for Part 1). If your function actually computes
-> from its arguments, those held-out tests pass and your final score
-> matches `local_check`. If your function hardcodes the public expected
-> values, the held-out tests deduct up to ~15 points.
+It also **prints** your Part 2 FLOPs / peak memory / (N, D) / DeepSeek-V3
+numbers so you can sanity-check them yourself, but does not score them.
+Everything else — those Part 2 numbers, `moe.md`, the entire Part 3
+notebook + report, and the Part 4 essay — is graded by the course staff
+from your submitted files and saved notebook output.
+
+> A green `local_check` does **not** mean full marks, and an item it does
+> not check is **not** worth zero — it just means a human grades it. Run
+> the Part 3 notebook yourself, save its output, and write the
+> analysis/report; that is what the staff read. Do not hardcode the
+> printed expected values: the staff re-run the Part 2 functions on
+> held-out inputs (a different config, a different budget).
 
 ## Submission
 
@@ -78,14 +78,16 @@ PA2 §2.1: `Allreduce`, `Allgather`, `Alltoall`, and (optionally) your own
 A reference `SimpleMoE` and a working `Router` are provided in `part1/moe.py`.
 Skeletons for `ShardedLinear`, `MoE_TP`, and `MoE_EP` are provided.
 
-Test:
+Test (run from the `pa3/` directory):
 
 ```bash
-mpirun -n 4 python part1/test_moe.py
+mpirun --oversubscribe -n 4 python part1/test_moe.py
 ```
 
-> If your machine has fewer physical cores than the requested process count,
-> use `mpirun --oversubscribe -n 4 python part1/test_moe.py`.
+> `--oversubscribe` is included because many environments (containers,
+> Slurm/cgroup-limited shells) report only one allocatable slot regardless
+> of physical core count, and Open MPI otherwise refuses to launch 4 ranks.
+> It is harmless on a normal multi-core machine.
 
 ### 1.1 Tensor Parallel (20 pts)
 
@@ -99,6 +101,13 @@ the full output.
 - `MoE_TP` (10 pts): full TP forward pass that uses `ShardedExpert` and the
   replicated router.
 
+Grading checks forward semantics — correct output shape and the full
+result replicated on every rank — not numerical equality with
+`SimpleMoE`. The given per-rank `ShardedLinear` init does not tile
+`SimpleMoE`'s weight matrix, so you do **not** need to modify
+`ShardedLinear.__init__`; implement only the `__call__` / `forward`
+methods.
+
 ### 1.2 Expert Parallel (20 pts)
 
 Each rank holds **one** expert in its entirety. After routing, tokens have to
@@ -109,11 +118,12 @@ all-to-all.
 - `MoE_EP` (20 pts): EP forward pass, using `mpi.alltoall(...)` (the
   pickle-based collective; supports variable-sized buckets per destination).
 
-> **Bonus path (+5 pts).** If you copy `myAlltoall` from your PA2
-> `mpi_wrapper/comm.py` into the marked location in `part1/mpi_wrapper/comm.py`
-> and route the EP all-to-all through it (zero-padded so sizes match), you
-> earn the bonus. We will verify by inspection and by running your tests with
-> `MPI4PY_RC_RECV_MPROBE=0`.
+> **Bonus path (+5 pts, best-effort).** If you copy `myAlltoall` from your
+> PA2 `mpi_wrapper/comm.py` into the marked location in
+> `part1/mpi_wrapper/comm.py` and route the EP all-to-all through it
+> (zero-padded so per-rank segment sizes match), you can earn up to +5.
+> This is graded by manual inspection of your code and reasoning; there is
+> no autograder check for it.
 
 ### 1.3 Benchmark (10 pts)
 
@@ -143,11 +153,11 @@ for two real models, and design your own model under a fixed compute budget.
     `num_key_value_heads = 8` vs. `num_attention_heads = 32`),
   - the MLP block (gate/up/down with SwiGLU),
   - the RMSNorm layers.
-- **Forward FLOPs** of a single transformer layer in TFLOPs.
+- **Forward FLOPs** of a single transformer layer in TFLOPs. Count the
+  attention projections (Q/K/V/O), the **QK^T and attention·V matmuls**,
+  and the MLP, with one multiply-add = 2 FLOPs.
   **Use `sequence_length = config["max_position_embeddings"]` and
-  `batch_size = 1`** as the grading convention. (The autograder uses these
-  values; using different values will make your numbers off by orders of
-  magnitude and fail the tolerance check.)
+  `batch_size = 1`** as the grading convention.
 - **Peak forward memory** for a single transformer layer under bf16 with
   rematerialization at layer boundaries.
 
@@ -183,7 +193,9 @@ python part2/model_training_cost_analysis.py --training_budget 5000000
 ```
 
 Then create `part2/my_model_config.json` matching the Llama-3 config schema
-with hyperparameters that hit your optimal `N`.
+with hyperparameters that hit your optimal `N`. This file is reviewed by
+hand — you do not need to (and should not) run it through the CLI, which
+only recognizes config filenames containing `llama` or `deepseek`.
 
 ### 2.3 MoE Cost Analysis — DeepSeek-V3 (Bonus, 25 pts)
 
@@ -242,7 +254,9 @@ Fill in the notebook stubs:
   and speedup at each setting.
 - Document any optimizations you applied (e.g. KV cache reuse for the draft,
   greedy vs. sampling, fp16 vs. bf16) and their measured effect.
-- Submit a short PDF report (≤ 2 pages) with these results.
+- Write a short report (≤ 2 pages) with these results as `part3/report.md`
+  (or `part3/report.pdf`). It ships inside `handin.tar`; there is no separate
+  upload.
 
 ### Bonus 3.B — Tree / Multi-branch Speculation (10 pts)
 

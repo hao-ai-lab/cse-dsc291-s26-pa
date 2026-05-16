@@ -22,11 +22,10 @@ def model_training_cost_analysis_llama(model_config_path):
 
     Returns:
         total_params:   total trainable parameter count (int)
-        flops_layer_TF: forward FLOPs of a single transformer layer in TFLOPs
-                        (use a representative sequence length)
-        peak_memory_GB: peak forward memory of a single transformer layer
-                        under bf16 / fp16 with rematerialization at layer
-                        boundaries (in GB)
+        flops_layer_TF: forward FLOPs of a single transformer layer (TFLOPs)
+        peak_memory_GB: peak forward memory of a single transformer layer (GB)
+
+    See the Part 2.1 writeup for the sequence-length / batch convention.
     """
     # TODO: implement.
     raise NotImplementedError
@@ -35,14 +34,8 @@ def model_training_cost_analysis_llama(model_config_path):
 def model_training_cost_analysis_deepseek(model_config_path):
     """Analyze training cost of a DeepSeek-V3-style MoE model.
 
-    Same return signature as the Llama version. Take care to:
-      - account for the MLA attention parameters (q/kv low-rank projections
-        plus the rope/no-rope head splits)
-      - distinguish dense layers (the first `first_k_dense_replace`) from
-        MoE layers (use `n_routed_experts`, `moe_intermediate_size`, plus
-        `n_shared_experts`)
-      - report *activated* FLOPs per token in the MoE layers (i.e. only the
-        `num_experts_per_tok` experts that fire)
+    Same return signature as the Llama version. See the Part 2.3 writeup
+    for the MLA attention and the dense-vs-MoE layer breakdown.
     """
     # TODO: implement.
     raise NotImplementedError
@@ -51,28 +44,15 @@ def model_training_cost_analysis_deepseek(model_config_path):
 def get_optimal_N_D_from_cost(cost_budget):
     """Pick the GPU and (N, D) that minimize loss under a $ training budget.
 
-    Use the scaling law:
-
-        L(N, D) = 406.4 / N^0.34 + 410.7 / D^0.29 + 1.69
-
-    GPU options (assume MFU = 40% across all three):
-
-        - H100 (SXM, fp16):   $3.0/hour, peak FP16 = 989 TFLOPs
-        - H200 (SXM, fp16):   $4.0/hour, peak FP16 = 989 TFLOPs
-        - B200 (SXM, fp16):   $6.0/hour, peak FP16 = 2250 TFLOPs
-
-    The training-flops budget for a given GPU at price `p` $/h is
-
-        F_total = cost_budget / p * 3600 * peak_TFLOPs * 1e12 * MFU
-
-    Use the standard 6 N D ≈ F_total approximation to convert budget into a
-    constraint, then solve the (N, D) optimization implied by the scaling law.
-
+    cost_budget: a monetary training budget (in dollars)
     Returns:
         N: optimal model parameter count (absolute number)
         D: optimal training token count (absolute number)
         training_budget_flops: effective total training FLOPs
         best_gpu: name of the selected GPU, one of {'H100', 'H200', 'B200'}
+
+    See the Part 2.2 writeup for the scaling law, the GPU price / TFLOPs
+    table, and the MFU assumption.
     """
     # TODO: implement.
     raise NotImplementedError
